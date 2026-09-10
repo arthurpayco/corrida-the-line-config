@@ -24,12 +24,13 @@ produz ao consultar https://paysagecorpal.zeev.it/api/2/instances/report
 do Yuiti (a chamada precisa sair da rede do computador dele porque o
 sandbox de nuvem nao tem saida liberada para o dominio do Zeev).
 
-Regras de negocio (definidas pelo Yuiti em 2026-09-10):
+Regras de negocio (definidas pelo Yuiti em 2026-09-10, semana redefinida em
+2026-09-10):
   - So conta como cadastro valido linhas com coluna H "Resultado da solicitacao"
     igual a "Aprovado" ou "Concluido".
   - Data de referencia = coluna E "Data de solicitacao" (formato DD/MM/AAAA).
   - Imobiliaria = coluna S ("imobiliaria"). Corretor = coluna V ("corretor").
-  - Semana: Domingo a Sabado.
+  - Semana: Sexta-feira a quinta-feira seguinte.
   - Cada cadastro valido rende R$20 para a imobiliaria (config valor_por_cadastro).
   - Premio semanal: R$1.000 para a imobiliaria com mais cadastros validos na semana
     (config premio_semanal).
@@ -37,6 +38,15 @@ Regras de negocio (definidas pelo Yuiti em 2026-09-10):
     *_excluir_contendo (ex.: "TESTE") sao descartadas por completo (nao contam
     em nenhum lugar) - normalmente cadastros de teste feitos durante a
     configuracao da campanha.
+  - Imobiliarias listadas em agencias_excluidas_ranking (config) - hoje so
+    "INTERNO", que e' o alias canonico para o que chegava do Zeev como
+    "Monaco"/"Imobiliaria Monaco" - sao tratadas como imobiliaria comum em
+    tudo (grafico diario, filtro), MAS: (1) nunca aparecem no pódio/placar da
+    semana (leaderboard) nem no ranking final de uma semana encerrada - se
+    ficariam entre as 3 primeiras, a 4a colocada sobe de posicao naturalmente
+    porque essa imobiliaria e' removida da lista antes do ranking ser
+    recalculado; (2) corretores associados a ela sao removidos por completo
+    do ranking de corretores.
 """
 import argparse
 import csv
@@ -85,15 +95,20 @@ def load_config(path):
         cfg = json.load(f)
     cfg.setdefault("valor_por_cadastro", 20)
     cfg.setdefault("premio_semanal", 1000)
+    cfg.setdefault("premio_corretor_semanal", 100)
     cfg.setdefault("imobiliaria_aliases", {})
     cfg.setdefault("corretor_aliases", {})
     cfg.setdefault("imobiliaria_excluir_contendo", ["TESTE"])
     cfg.setdefault("corretor_excluir_contendo", ["TESTE"])
+    cfg.setdefault("agencias_excluidas_ranking", [])
     # normaliza chaves dos mapas de alias
     cfg["_imob_map"] = {norm_key(k): v for k, v in cfg["imobiliaria_aliases"].items()}
     cfg["_corr_map"] = {norm_key(k): v for k, v in cfg["corretor_aliases"].items()}
     cfg["_imob_excl"] = [norm_key(t) for t in cfg["imobiliaria_excluir_contendo"]]
     cfg["_corr_excl"] = [norm_key(t) for t in cfg["corretor_excluir_contendo"]]
+    # agencias (ja no nome canonico, pos-alias) que ficam de fora do
+    # pódio/leaderboard e do ranking de corretores - ver docstring do modulo
+    cfg["_rank_excl"] = {norm_key(a) for a in cfg["agencias_excluidas_ranking"]}
     return cfg
 
 
@@ -128,9 +143,9 @@ def parse_date_br(s):
 
 
 def week_bounds(d):
-    """Domingo a sabado contendo a data d."""
-    dow_sun0 = (d.weekday() + 1) % 7  # segunda=0..domingo=6 -> domingo=0..sabado=6
-    start = d - timedelta(days=dow_sun0)
+    """Sexta-feira a quinta-feira seguinte contendo a data d."""
+    dow_fri0 = (d.weekday() - 4) % 7  # segunda=0..domingo=6 -> sexta=0..quinta=6
+    start = d - timedelta(days=dow_fri0)
     end = start + timedelta(days=6)
     return start, end
 
@@ -277,8 +292,19 @@ def build_data(rows, cfg, today=None, history_store=None):
     # historico: semana(start_iso) -> agencia -> status -> contagem (usado so
     # para CONGELAR semanas recem-fechadas - ver history_store abaixo)
     history_week_agency_status = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    # historico do corretor campeao: semana(start_iso) -> corretor -> validos,
+    # e semana -> corretor -> agencia -> contagem (pra achar a imobiliaria mais
+    # frequente daquele corretor naquela semana) - usado so' para CONGELAR o
+    # "Rei/Rainha dos Cadastros" de semanas recem-fechadas junto com o resto
+    history_week_broker_valid = defaultdict(lambda: defaultdict(int))
+    history_week_broker_agency_count = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     # todas as agencias vistas (para popular filtro), com pelo menos 1 registro valido em qualquer semana
     all_agencies_ever = set()
+    # funil geral da campanha inteira (todas as semanas, todas as imobiliarias
+    # inclusive as excluidas do ranking) - ver funil_geral no retorno
+    funil_validos = 0
+    funil_rejeitados = 0
+    funil_pendentes = 0
 
     for r in rows:
         raw_imob = r["imobiliaria"]
@@ -300,8 +326,22 @@ def build_data(rows, cfg, today=None, history_store=None):
 
         all_agencies_ever.add(agencia)
 
+        if is_valid:
+            funil_validos += 1
+        elif st == "REJEITADO":
+            funil_rejeitados += 1
+        else:
+            funil_pendentes += 1
+
         w_start, _ = week_bounds(d)
         history_week_agency_status[w_start.isoformat()][agencia][st] += 1
+
+        if is_valid and norm_key(agencia) not in cfg["_rank_excl"]:
+            corretor_hist = canonical_broker(raw_corretor, cfg)
+            if corretor_hist:
+                w_start_iso = w_start.isoformat()
+                history_week_broker_valid[w_start_iso][corretor_hist] += 1
+                history_week_broker_agency_count[w_start_iso][corretor_hist][agencia] += 1
 
         if w_start == week_start:
             week_agency_status[agencia][st] += 1
@@ -317,9 +357,14 @@ def build_data(rows, cfg, today=None, history_store=None):
     valor_unit = cfg["valor_por_cadastro"]
     premio = cfg["premio_semanal"]
 
-    # leaderboard da semana atual
+    # leaderboard da semana atual (imobiliarias em agencias_excluidas_ranking
+    # ficam de fora do podio - se estivesse entre as 3 primeiras, a 4a
+    # colocada assume a posicao dela automaticamente, ja que o ranking e'
+    # recalculado so' com quem sobrou aqui)
     leaderboard = []
     for agencia, statuses in week_agency_status.items():
+        if norm_key(agencia) in cfg["_rank_excl"]:
+            continue
         aprovados = statuses.get("APROVADO", 0)
         concluidos = statuses.get("CONCLUIDO", 0)
         rejeitados = statuses.get("REJEITADO", 0)
@@ -355,14 +400,31 @@ def build_data(rows, cfg, today=None, history_store=None):
         daily_out[agencia] = normalize_daily(daily.get(agencia, {}))
     daily_out["__ALL__"] = normalize_daily(daily.get("__ALL__", {}))
 
-    # ranking de corretores da semana atual (top 15)
+    # ranking de corretores da semana atual (top 15) - corretores cuja
+    # imobiliaria mais frequente esta em agencias_excluidas_ranking sao
+    # descartados por completo desta lista (nao so' do topo)
     brokers = []
     for corretor, validos in week_broker_valid.items():
         agencia_top = max(week_broker_agency_count[corretor].items(), key=lambda kv: kv[1])[0]
+        if norm_key(agencia_top) in cfg["_rank_excl"]:
+            continue
         brokers.append({"corretor": corretor, "agencia": agencia_top, "validos": validos})
     brokers.sort(key=lambda x: (-x["validos"], x["corretor"]))
     assign_ranks(brokers, "validos")
     brokers = brokers[:15]
+
+    # corretor com mais cadastros validos na semana atual ("Rei/Rainha dos
+    # Cadastros") - premio individual separado do premio da imobiliaria.
+    # brokers[0] ja' esta' ordenado/filtrado (sem agencias de
+    # agencias_excluidas_ranking) e com posicao atribuida, entao e' so' usar
+    # ele direto quando houver pelo menos 1 cadastro valido na semana.
+    corretor_campeao = None
+    if brokers and brokers[0]["validos"] > 0:
+        corretor_campeao = {
+            "corretor": brokers[0]["corretor"],
+            "agencia": brokers[0]["agencia"],
+            "validos": brokers[0]["validos"],
+        }
 
     # historico de semanas anteriores (fechadas): a primeira vez que uma
     # semana aparece aqui com w_start_d < week_start ela acabou de "fechar"
@@ -381,6 +443,8 @@ def build_data(rows, cfg, today=None, history_store=None):
         w_end_d = w_start_d + timedelta(days=6)
         ranking = []
         for agencia, statuses in agency_statuses.items():
+            if norm_key(agencia) in cfg["_rank_excl"]:
+                continue
             aprovados = statuses.get("APROVADO", 0)
             concluidos = statuses.get("CONCLUIDO", 0)
             rejeitados = statuses.get("REJEITADO", 0)
@@ -401,6 +465,26 @@ def build_data(rows, cfg, today=None, history_store=None):
         assign_ranks(ranking, "validos")
         top_count = ranking[0]["validos"]
         winners = [r["agencia"] for r in ranking if r["validos"] == top_count] if top_count > 0 else []
+
+        # congela junto o "Rei/Rainha dos Cadastros" daquela semana (corretor
+        # com mais cadastros validos, ja excluindo agencias_excluidas_ranking)
+        week_brokers = history_week_broker_valid.get(w_start_iso, {})
+        corretor_campeao_hist = None
+        if week_brokers:
+            top_corretor, top_validos = sorted(
+                week_brokers.items(), key=lambda kv: (-kv[1], kv[0])
+            )[0]
+            if top_validos > 0:
+                agencia_top = max(
+                    history_week_broker_agency_count[w_start_iso][top_corretor].items(),
+                    key=lambda kv: kv[1],
+                )[0]
+                corretor_campeao_hist = {
+                    "corretor": top_corretor,
+                    "agencia": agencia_top,
+                    "validos": top_validos,
+                }
+
         history_store[w_start_iso] = {
             "semana_label": fmt_week_label(w_start_d, w_end_d),
             "semana_start": w_start_iso,
@@ -408,6 +492,7 @@ def build_data(rows, cfg, today=None, history_store=None):
             "validos": top_count,
             "premio": premio,
             "ranking": ranking,
+            "corretor_campeao": corretor_campeao_hist,
         }
 
     history = sorted(history_store.values(), key=lambda x: x["semana_start"], reverse=True)
@@ -420,6 +505,14 @@ def build_data(rows, cfg, today=None, history_store=None):
         insight = {"lider": lider["agencia"], "gap": gap}
 
     generated_at = datetime.now(TZ) if TZ else datetime.now()
+
+    funil_total = funil_validos + funil_rejeitados + funil_pendentes
+    funil_geral = {
+        "total": funil_total,
+        "validos": funil_validos,
+        "rejeitados": funil_rejeitados,
+        "pendentes": funil_pendentes,
+    }
 
     return {
         "generated_at": generated_at.strftime("%d/%m/%Y %H:%M"),
@@ -434,6 +527,7 @@ def build_data(rows, cfg, today=None, history_store=None):
         "config": {
             "valor_por_cadastro": valor_unit,
             "premio_semanal": premio,
+            "premio_corretor_semanal": cfg["premio_corretor_semanal"],
         },
         "totals": {
             "rows_total": rows_total,
@@ -444,9 +538,11 @@ def build_data(rows, cfg, today=None, history_store=None):
         "max_validos": max_validos,
         "insight": insight,
         "brokers": brokers,
+        "corretor_campeao": corretor_campeao,
         "daily": daily_out,
         "agencies": ["Todas"] + sorted(all_agencies_ever),
         "history": history,
+        "funil_geral": funil_geral,
         "status_labels": STATUS_LABELS,
         "status_order": STATUS_ORDER,
     }

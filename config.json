@@ -1,18 +1,20 @@
 {
-  "_comment": "Config da Corrida The Line. Editar aqui para corrigir nomes de imobiliarias/corretores conforme aparecem novas variacoes na planilha do Zeev. Chaves de alias devem estar em MAIUSCULO, SEM ACENTO, SEM ESPACOS DUPLICADOS/NAS PONTAS - o script normaliza o valor bruto da planilha (strip + upper + remove acentos) antes de procurar no mapa.",
+  "_comment": "Config da Corrida The Line. Editar aqui para corrigir nomes de imobiliarias/corretores conforme aparecem novas variacoes na planilha do Zeev. Chaves de alias devem estar em MAIUSCULO, SEM ACENTO, SEM ESPACOS DUPLICADOS/NAS PONTAS - o script normaliza o valor bruto da planilha (strip + upper + remove acentos) antes de procurar no mapa. Semana da campanha: sexta-feira a quinta-feira seguinte. agencias_excluidas_ranking: nomes CANONICOS (ja pos-alias) de imobiliarias que nunca aparecem no podio/leaderboard nem no ranking de corretores (mas continuam normais no grafico diario e no filtro) - hoje so 'INTERNO', que e' pra onde 'Monaco'/'Imobiliaria Monaco' sao mapeados.",
   "valor_por_cadastro": 20,
-  "premio_semanal": 1000,
-  "semana_inicio_domingo": true,
+  "premio_semanal": 1500,
+  "premio_corretor_semanal": 100,
+  "semana_inicio_sexta": true,
   "imobiliaria_aliases": {
     "GEUM": "GEUM",
     "BARRETO": "Barreto",
-    "MONACO": "Mônaco",
-    "IMOBILIARIA MONACO": "Mônaco",
+    "MONACO": "INTERNO",
+    "IMOBILIARIA MONACO": "INTERNO",
     "RD ONE": "RD One",
     "RD ONE IMOB": "RD One",
     "INGLATERRA": "Inglaterra",
     "LUCAS HRECAY IMOB": "Lucas Hrecay"
   },
+  "agencias_excluidas_ranking": ["INTERNO"],
   "imobiliaria_excluir_contendo": ["TESTE"],
   "corretor_aliases": {
     "ANDRE ALMEIDA": "André Almeida",

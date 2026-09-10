@@ -105,6 +105,18 @@
     padding:12px 16px;font-size:13.5px;font-weight:600;color:#6b5424;}
   .race-empty{padding:36px 16px;text-align:center;color:var(--text-muted);font-size:13px;}
 
+  /* ---------- funil geral (totais da campanha, sempre horizontal) ---------- */
+  .funil-card{background:var(--surface-card);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);
+    padding:20px clamp(8px,2vw,20px);display:flex;flex-wrap:nowrap;align-items:stretch;gap:0;overflow-x:auto;}
+  .funil-step{flex:1 1 0;min-width:126px;padding:4px 14px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;}
+  .funil-value{font-size:clamp(20px,3.2vw,30px);font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1.05;white-space:nowrap;}
+  .funil-label{margin-top:5px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;}
+  .funil-step.is-validos .funil-value{color:var(--success);}
+  .funil-step.is-rejeitados .funil-value{color:var(--critical);}
+  .funil-step.is-pendentes .funil-value{color:var(--text-muted);}
+  .funil-arrow{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding:0 2px;color:var(--border-soft);}
+  .funil-arrow svg{width:18px;height:18px;}
+
   /* ---------- filter / chart ---------- */
   .filter-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   select.agency-filter{border:1px solid var(--border-soft);border-radius:var(--radius-pill);padding:9px 34px 9px 16px;font-size:12.5px;
@@ -128,6 +140,8 @@
   td.rank{font-weight:800;color:var(--text-muted);width:36px;}
   tbody tr.top3 td.rank{color:#8A6A2E;}
   td.name{color:var(--text-primary);font-weight:600;}
+  .broker-trophy{display:inline-block;width:14px;height:14px;margin-right:6px;vertical-align:-2px;color:#8A6A2E;}
+  .broker-trophy svg{width:14px;height:14px;display:block;}
   .empty-row{text-align:center;padding:32px;color:var(--text-muted);}
 
   /* ---------- history ---------- */
@@ -183,6 +197,7 @@
     .race-finish-line{right:92px;}
     .race-car{width:31px;height:20px;}
     .race-car svg{width:26px;}
+    .funil-step{min-width:108px;padding:4px 10px;}
   }
 </style>
 </head>
@@ -217,9 +232,10 @@
     </div>
 
     <div class="rules-row">
-      <div class="rule-chip"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></span><b>R$20</b>&nbsp;por cadastro aprovado</div>
-      <div class="rule-chip"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a4 4 0 100-8 4 4 0 000 8z"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg></span><b>R$1.000</b>&nbsp;prêmio semanal ao 1º lugar</div>
-      <div class="rule-chip"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Semana&nbsp;<b>domingo a sábado</b></div>
+      <div class="rule-chip"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></span><b id="chipValorCadastro">R$20</b>&nbsp;por cadastro aprovado</div>
+      <div class="rule-chip"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a4 4 0 100-8 4 4 0 000 8z"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg></span><b id="chipPremioSemanal">R$1.000</b>&nbsp;prêmio semanal à imobiliária 1º lugar</div>
+      <div class="rule-chip"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M17 5h2a2 2 0 012 2c0 3-2 5-4.5 5M7 5H5a2 2 0 00-2 2c0 3 2 5 4.5 5"/><path d="M7 4h10v5a5 5 0 01-10 0V4z"/></svg></span><b id="chipPremioCorretor">R$100</b>&nbsp;prêmio ao corretor que mais cadastrar na semana</div>
+      <div class="rule-chip"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Semana&nbsp;<b>sexta a quinta</b></div>
     </div>
   </div>
 </header>
@@ -239,6 +255,17 @@
       <div id="raceList"></div>
     </div>
     <div class="race-insight" id="raceInsight" hidden></div>
+  </section>
+
+  <section id="funilSection">
+    <div class="sec-head">
+      <div>
+        <p class="eyebrow">Campanha completa</p>
+        <h2 class="sec-title">Funil geral de cadastros</h2>
+        <p class="sec-meta">Total acumulado desde o início da campanha, somando todas as semanas e imobiliárias</p>
+      </div>
+    </div>
+    <div class="funil-card" id="funilCard"></div>
   </section>
 
   <section id="chartSection">
@@ -547,16 +574,48 @@ function renderRaceboard(){
   }
 }
 
+/* ---------------- Chips de regras (valores vêm do config, não são fixos no HTML) ---------------- */
+function renderRuleChips(){
+  const cfg = SCORE_DATA.config || {};
+  const setChip = (id, val) => {
+    const el = document.getElementById(id);
+    if(el && val != null) el.textContent = fmtMoney(val);
+  };
+  setChip('chipValorCadastro', cfg.valor_por_cadastro);
+  setChip('chipPremioSemanal', cfg.premio_semanal);
+  setChip('chipPremioCorretor', cfg.premio_corretor_semanal);
+}
+
+/* ---------------- Funil geral (totais da campanha inteira) ---------------- */
+function renderFunil(){
+  const f = SCORE_DATA.funil_geral;
+  const card = document.getElementById('funilCard');
+  if(!f){ card.innerHTML = ''; return; }
+  const steps = [
+    {cls:'is-total', label:'Total de cadastros', value:f.total},
+    {cls:'is-validos', label:'Cadastros válidos', value:f.validos},
+    {cls:'is-rejeitados', label:'Cadastros rejeitados', value:f.rejeitados},
+    {cls:'is-pendentes', label:'Cadastros pendentes', value:f.pendentes},
+  ];
+  const arrowSvg = `<span class="funil-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></span>`;
+  card.innerHTML = steps.map((s,i)=>`<div class="funil-step ${s.cls}">
+      <div class="funil-value">${fmtInt(s.value)}</div>
+      <div class="funil-label">${s.label}</div>
+    </div>${i < steps.length-1 ? arrowSvg : ''}`).join('');
+}
+
+const TROPHY_ICON_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M17 5h2a2 2 0 012 2c0 3-2 5-4.5 5M7 5H5a2 2 0 00-2 2c0 3 2 5 4.5 5"/><path d="M7 4h10v5a5 5 0 01-10 0V4z"/></svg>`;
 function renderBrokers(){
   const body = document.getElementById('brokerBody');
   if(SCORE_DATA.brokers.length === 0){
     body.innerHTML = '<tr><td colspan="4" class="empty-row">Sem cadastros nesta semana ainda.</td></tr>';
     return;
   }
+  const premioCorretor = (SCORE_DATA.config && SCORE_DATA.config.premio_corretor_semanal) || 0;
   body.innerHTML = SCORE_DATA.brokers.map(r=>`
     <tr class="${r.posicao<=3?'top3':''}">
       <td class="rank">${r.posicao}</td>
-      <td class="name">${escapeHtml(r.corretor)}</td>
+      <td class="name">${r.posicao===1 ? `<span class="broker-trophy" title="Rei/Rainha dos Cadastros da Semana — prêmio de ${fmtMoney(premioCorretor)}">${TROPHY_ICON_SVG}</span>` : ''}${escapeHtml(r.corretor)}</td>
       <td>${escapeHtml(r.agencia)}</td>
       <td class="num">${fmtInt(r.validos)}</td>
     </tr>`).join('');
@@ -602,6 +661,7 @@ async function openHistoryShare(weekStart){
     leaderboard: entry.ranking,
     weekLabel: entry.semana_label,
     closed: true,
+    corretorCampeao: entry.corretor_campeao || null,
   });
   const blob = await canvasToBlob(canvas);
   if(currentImgUrl) URL.revokeObjectURL(currentImgUrl);
@@ -736,6 +796,7 @@ async function drawShareCard(w, h, opts){
   const closed = !!opts.closed;
   const weekLabel = opts.weekLabel || SCORE_DATA.week.label;
   const leaderboardSrc = opts.leaderboard || SCORE_DATA.leaderboard;
+  const championEntry = ('corretorCampeao' in opts) ? opts.corretorCampeao : SCORE_DATA.corretor_campeao;
 
   // Canvas novo a cada chamada (em vez de reaproveitar um único elemento
   // fixo da página): como o feed e o status são pré-gerados em paralelo
@@ -767,26 +828,28 @@ async function drawShareCard(w, h, opts){
     const logoImg = await loadImage(LOGO_WORDMARK_DATA_URI);
     const logoW = w*0.34, logoH = logoW * (logoImg.height/logoImg.width);
     ctx.drawImage(logoImg, pad, cursorY, logoW, logoH);
-    cursorY += logoH + h*0.06;
-  }catch(e){ cursorY += h*0.03; }
+    cursorY += logoH + h*0.035;
+  }catch(e){ cursorY += h*0.02; }
 
   ctx.fillStyle = '#8A6A2E';
   ctx.font = `700 ${w*0.024}px Montserrat, sans-serif`;
   ctx.fillText('PROGRAMA DE BONIFICAÇÃO · LANÇAMENTO THE LINE', pad, cursorY);
-  cursorY += h*0.06;
+  cursorY += h*0.045;
 
+  // Textos do bloco de título/data agrupados mais perto uns dos outros
+  // (gaps reduzidos) pra abrir espaço embaixo pro bloco do corretor campeão.
   ctx.fillStyle = '#2C2D2A';
   ctx.font = `800 ${w*0.066}px Montserrat, sans-serif`;
   ctx.fillText('Corrida', pad, cursorY);
-  cursorY += h*0.068;
+  cursorY += h*0.042;
   ctx.fillStyle = '#8A6A2E';
   ctx.fillText('The Line', pad, cursorY);
-  cursorY += h*0.085;
+  cursorY += h*0.05;
 
   ctx.fillStyle = 'rgba(44,45,42,.55)';
   ctx.font = `600 ${w*0.022}px Montserrat, sans-serif`;
   ctx.fillText(weekLabel.toUpperCase(), pad, cursorY);
-  cursorY += h*0.05;
+  cursorY += h*0.035;
 
   const lb = leaderboardSrc.filter(r=>r.validos>0).slice(0,3);
   const RANK_COLORS = [
@@ -834,19 +897,31 @@ async function drawShareCard(w, h, opts){
     ctx.fillText('Placar em aberto — corra pro topo!', pad, cursorY+rowH*0.5);
   }
 
+  const hasChampion = !!(championEntry && championEntry.validos > 0);
+  const championBlockH = hasChampion ? h*0.185 : 0;
+  const bottomMargin = h*0.04;
+
   if(lb.length > 0){
     const leader = lb[0];
     // Orçamento de espaço calculado a partir do que sobrou depois da lista,
     // em vez de frações fixas de h: garante que o troféu + os dois textos
     // sempre cabem dentro do canvas, mesmo em formatos mais baixos (feed
     // 1080x1350) — antes o texto de destaque acabava caindo fora da imagem.
+    // Quando ha' corretor campeão pra mostrar, o bloco reserva espaço extra
+    // (championBlockH) embaixo pra ele, então esse troféu/headline encolhe
+    // pra caber por cima.
     const afterListY = cursorY + lb.length*rowH + h*0.045;
-    const bottomMargin = h*0.04;
-    const availH = Math.max(h - afterListY - bottomMargin, h*0.16);
+    // O piso (2º argumento do Math.max) evita que o troféu de liderança fique
+    // minúsculo demais quando a lista ocupa muito espaço - mas ele precisa
+    // deixar espaço suficiente pro bloco do "Rei/Rainha dos Cadastros"
+    // (championBlockH) logo abaixo, senão os dois se sobrepõem. Com o bloco
+    // do corretor mais alto (championBlockH maior, pra caber a contagem de
+    // cadastros), esse piso teve que diminuir também.
+    const availH = Math.max(h - afterListY - bottomMargin - championBlockH, h*0.085);
     const trophyAR = TROPHY_LAUREL.vbH / TROPHY_LAUREL.vbW;
     const gapH = availH*0.07;
     const textBlockH = availH*0.36;
-    const trophyW = Math.min((availH - gapH - textBlockH) / trophyAR, w*0.48);
+    const trophyW = Math.min((availH - gapH - textBlockH) / trophyAR, w*0.42);
     const trophyH = trophyW * trophyAR;
     const trophyCx = w/2;
     const trophyCy = afterListY + trophyH/2;
@@ -862,6 +937,42 @@ async function drawShareCard(w, h, opts){
     ctx.fillStyle = 'rgba(44,45,42,.5)';
     ctx.font = `700 ${w*0.024}px Montserrat, sans-serif`;
     ctx.fillText(closed ? '#corridatheline' : '#segueolíder', trophyCx, headlineY + textBlockH*0.48);
+    ctx.textAlign = 'left';
+  }
+
+  // Bloco do "Rei/Rainha dos Cadastros" — o corretor com mais cadastros
+  // válidos na semana (prêmio individual de R$100, separado do prêmio da
+  // imobiliária), ancorado na parte de baixo da imagem para aproveitar o
+  // espaço aberto ao compactar o bloco de título/data acima.
+  if(hasChampion){
+    const blockTop = h - bottomMargin - championBlockH;
+    ctx.strokeStyle = 'rgba(44,45,42,.12)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pad, blockTop);
+    ctx.lineTo(w-pad, blockTop);
+    ctx.stroke();
+
+    const cx = w/2;
+    const iconSize = championBlockH*0.22;
+    const iconCy = blockTop + championBlockH*0.16;
+    drawCrownBadge(ctx, cx, iconCy, iconSize, {light:'#F3E3B0', dark:'#8A6A2E'});
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8A6A2E';
+    ctx.font = `800 ${w*0.021}px Montserrat, sans-serif`;
+    ctx.fillText('REI/RAINHA DOS CADASTROS DA SEMANA', cx, blockTop + championBlockH*0.35);
+
+    fitCenteredText(ctx, championEntry.corretor,
+      cx, blockTop + championBlockH*0.53, w-pad*2, w*0.036, 800, 'Montserrat, sans-serif', '#2C2D2A');
+
+    ctx.fillStyle = 'rgba(44,45,42,.55)';
+    ctx.font = `600 ${w*0.02}px Montserrat, sans-serif`;
+    ctx.fillText(championEntry.agencia, cx, blockTop + championBlockH*0.68);
+
+    ctx.fillStyle = '#4C6B3F';
+    ctx.font = `800 ${w*0.026}px Montserrat, sans-serif`;
+    ctx.fillText(`${fmtInt(championEntry.validos)} cadastros válidos`, cx, blockTop + championBlockH*0.88);
     ctx.textAlign = 'left';
   }
 
@@ -935,6 +1046,51 @@ function drawTrophyBadge(ctx, cx, cy, size, colors, number){
     ctx.fillText(String(number), cx, cy - size*0.05);
     ctx.restore();
   }
+}
+// Desenha uma coroa no mesmo estilo do ícone de referência que o Yuiti
+// enviou (faixa arredondada na base + 3 arcos ondulados terminando em bolinhas
+// no topo), mas na coloração já usada no resto da página (degradê
+// claro->escuro dourado, igual ao do troféu) em vez do amarelo/laranja do
+// ícone original — usada no bloco do "Rei/Rainha dos Cadastros" da imagem de
+// compartilhamento (o troféu já aparece no pódio das imobiliárias, então aqui
+// a coroa distingue visualmente o prêmio individual do corretor).
+function drawCrownBadge(ctx, cx, cy, size, colors){
+  ctx.save();
+  const s = size/100;
+  ctx.translate(cx - size/2, cy - size/2);
+  ctx.scale(s, s);
+  const grad = ctx.createLinearGradient(0,8,0,94);
+  grad.addColorStop(0, colors.light);
+  grad.addColorStop(1, colors.dark);
+  ctx.fillStyle = grad;
+
+  // corpo ondulado: 3 arcos suaves (esquerda/meio/direita) que sobem até
+  // ficar por baixo de cada bolinha, com "vales" arredondados entre eles
+  ctx.beginPath();
+  ctx.moveTo(14, 80);
+  ctx.quadraticCurveTo(14, 56, 23, 44);
+  ctx.quadraticCurveTo(32, 54, 38, 63);
+  ctx.quadraticCurveTo(44, 46, 50, 34);
+  ctx.quadraticCurveTo(56, 46, 62, 63);
+  ctx.quadraticCurveTo(68, 54, 77, 44);
+  ctx.quadraticCurveTo(86, 56, 86, 80);
+  ctx.closePath();
+  ctx.fill();
+
+  // faixa arredondada na base
+  roundRect(ctx, 12, 78, 76, 17, 6);
+  ctx.fill();
+
+  // as 3 bolinhas no topo de cada arco, na mesma coloração (não brancas,
+  // como no ícone de referência - lá elas têm um tom levemente diferente,
+  // aqui reaproveitamos o mesmo degradê pra manter a paleta da página)
+  [[23,42,11], [50,32,12], [77,42,11]].forEach(([x,y,r])=>{
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  ctx.restore();
 }
 // Ilustração do troféu com ramos de louro — traçado vetorial (potrace) da
 // imagem de referência enviada pelo usuário, preservando a forma exata do
@@ -1057,7 +1213,9 @@ async function offerShareImage(){
 document.getElementById('shareBtn').addEventListener('click', handleShareClick);
 
 /* ---------------- init ---------------- */
+renderRuleChips();
 renderRaceboard();
+renderFunil();
 renderBrokers();
 renderHistory();
 setupFilter();
