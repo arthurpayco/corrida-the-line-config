@@ -86,6 +86,8 @@
   .race-name{font-size:14.5px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--text-primary);}
   .race-row.r1 .race-name{font-size:16.5px;}
   .race-valor{font-size:11.5px;font-weight:700;color:var(--success);background:var(--success-bg);padding:2px 9px;border-radius:var(--radius-pill);}
+  .race-premio{font-size:11.5px;font-weight:700;color:#8A6A2E;background:var(--warning-bg);padding:2px 9px 2px 7px;border-radius:var(--radius-pill);display:inline-flex;align-items:center;gap:4px;}
+  .race-premio svg{width:11px;height:11px;flex-shrink:0;}
   .race-track{position:relative;height:10px;background:var(--surface-muted);border-radius:6px;}
   .race-fill{position:absolute;top:0;left:0;height:100%;border-radius:6px;background:var(--payco-olive);transition:width .7s cubic-bezier(.22,.9,.32,1);}
   .race-row.r1 .race-fill{background:linear-gradient(90deg,#cdb47b,var(--payco-gold));}
@@ -538,18 +540,27 @@ function renderRaceboard(){
   const lb = (SCORE_DATA.leaderboard || []).slice(0,3);
   const list = document.getElementById('raceList');
   const maxV = Math.max(SCORE_DATA.max_validos, 1);
+  const premioSemanal = (SCORE_DATA.config && SCORE_DATA.config.premio_semanal) || 0;
   if(!lb || lb.length === 0){
     list.innerHTML = '<div class="race-empty">Nenhum cadastro nesta semana ainda.</div>';
   } else {
     list.innerHTML = lb.map(row=>{
       const pct = Math.max((row.validos/maxV)*100, row.validos>0 ? 4 : 0);
       const cls = rankClass(row.posicao);
+      // Só a imobiliária em 1º lugar leva o prêmio semanal (se o placar
+      // fechar assim) - o selo "+R$1.500" ao lado do valor por cadastro deixa
+      // claro que, além do que já rendeu em cadastros, ela está levando esse
+      // bônus extra por estar na liderança agora.
+      const premioBadge = (row.posicao === 1 && row.validos > 0 && premioSemanal > 0)
+        ? `<span class="race-premio" title="Prêmio semanal de quem fechar a semana em 1º lugar">${TROPHY_ICON_SVG}+${fmtMoney(premioSemanal)}</span>`
+        : '';
       return `<div class="race-row ${cls}">
         <div class="race-rank">${row.posicao}</div>
         <div class="race-main">
           <div class="race-name-row">
             <span class="race-name">${escapeHtml(row.agencia)}</span>
             <span class="race-valor">${fmtMoney(row.valor)}</span>
+            ${premioBadge}
           </div>
           <div class="race-track">
             <div class="race-fill" style="width:${pct}%"></div>
@@ -662,6 +673,7 @@ async function openHistoryShare(weekStart){
     weekLabel: entry.semana_label,
     closed: true,
     corretorCampeao: entry.corretor_campeao || null,
+    premio: entry.premio,
   });
   const blob = await canvasToBlob(canvas);
   if(currentImgUrl) URL.revokeObjectURL(currentImgUrl);
@@ -797,6 +809,11 @@ async function drawShareCard(w, h, opts){
   const weekLabel = opts.weekLabel || SCORE_DATA.week.label;
   const leaderboardSrc = opts.leaderboard || SCORE_DATA.leaderboard;
   const championEntry = ('corretorCampeao' in opts) ? opts.corretorCampeao : SCORE_DATA.corretor_campeao;
+  // Prêmio semanal a destacar ao lado do valor da imobiliária em 1º lugar:
+  // numa semana já encerrada (histórico) usa o valor que estava em vigor
+  // NAQUELA semana (congelado em entry.premio), não o valor atual do config -
+  // o prêmio pode ter mudado desde então.
+  const premioSemanalShare = ('premio' in opts) ? opts.premio : ((SCORE_DATA.config && SCORE_DATA.config.premio_semanal) || 0);
 
   // Canvas novo a cada chamada (em vez de reaproveitar um único elemento
   // fixo da página): como o feed e o status são pré-gerados em paralelo
@@ -879,7 +896,19 @@ async function drawShareCard(w, h, opts){
 
     ctx.fillStyle = 'rgba(44,45,42,.5)';
     ctx.font = `600 ${w*0.019}px Montserrat, sans-serif`;
-    ctx.fillText(fmtMoney(row.valor), pad+w*0.16, y+rowH*0.62);
+    const valorLabel = fmtMoney(row.valor);
+    ctx.fillText(valorLabel, pad+w*0.16, y+rowH*0.62);
+
+    // 1º lugar: acrescenta "+R$1.500" (prêmio semanal) logo depois do valor
+    // por cadastro, pra deixar claro que, além do que já rendeu em
+    // cadastros, essa imobiliária está levando esse bônus extra por estar
+    // (ou ter fechado) na liderança da semana.
+    if(i === 0 && row.validos > 0 && premioSemanalShare > 0){
+      const valorWidth = ctx.measureText(valorLabel).width;
+      ctx.fillStyle = '#8A6A2E';
+      ctx.font = `700 ${w*0.019}px Montserrat, sans-serif`;
+      ctx.fillText(`  +${fmtMoney(premioSemanalShare)}`, pad+w*0.16+valorWidth, y+rowH*0.62);
+    }
 
     ctx.textAlign = 'right';
     ctx.fillStyle = i===0 ? '#8A6A2E' : '#2C2D2A';
