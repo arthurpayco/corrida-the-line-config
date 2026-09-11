@@ -38,15 +38,19 @@ Regras de negocio (definidas pelo Yuiti em 2026-09-10, semana redefinida em
     *_excluir_contendo (ex.: "TESTE") sao descartadas por completo (nao contam
     em nenhum lugar) - normalmente cadastros de teste feitos durante a
     configuracao da campanha.
-  - Imobiliarias listadas em agencias_excluidas_ranking (config) - hoje so
-    "INTERNO", que e' o alias canonico para o que chegava do Zeev como
-    "Monaco"/"Imobiliaria Monaco" - sao tratadas como imobiliaria comum em
-    tudo (grafico diario, filtro), MAS: (1) nunca aparecem no pódio/placar da
-    semana (leaderboard) nem no ranking final de uma semana encerrada - se
+  - Imobiliarias listadas em agencias_excluidas_ranking (config) - hoje
+    "INTERNO" (alias canonico para o que chegava do Zeev como "Monaco"/
+    "Imobiliaria Monaco") e "RIO VERMELHO" - contam SOMENTE no funil geral
+    da campanha (funil_geral no JSON de saida). Definido por Yuiti em
+    2026-09-11: (1) nao aparecem na lista de imobiliarias do filtro de
+    "cadastros por dia da semana", nem entram no grafico diario (nem no
+    total "Todas" combinado); (2) nunca aparecem no pódio/placar da semana
+    (leaderboard) nem no ranking final de uma semana encerrada - se
     ficariam entre as 3 primeiras, a 4a colocada sobe de posicao naturalmente
     porque essa imobiliaria e' removida da lista antes do ranking ser
-    recalculado; (2) corretores associados a ela sao removidos por completo
-    do ranking de corretores.
+    recalculado; (3) corretores associados a ela sao removidos por completo
+    do ranking de corretores. So' entram na contagem do funil geral (todos
+    os status, de todas as imobiliarias, inclusive essas).
 """
 import argparse
 import csv
@@ -317,7 +321,8 @@ def build_data(rows, cfg, today=None, history_store=None):
     # todas as agencias vistas (para popular filtro), com pelo menos 1 registro valido em qualquer semana
     all_agencies_ever = set()
     # funil geral da campanha inteira (todas as semanas, todas as imobiliarias
-    # inclusive as excluidas do ranking) - ver funil_geral no retorno
+    # inclusive as que so' contam aqui - ver agencias_excluidas_ranking na
+    # docstring do modulo, e funil_geral no retorno)
     funil_validos = 0
     funil_rejeitados = 0
     funil_pendentes = 0
@@ -339,8 +344,13 @@ def build_data(rows, cfg, today=None, history_store=None):
 
         st = status_key(r["resultado"])
         is_valid = st in STATUS_VALID
+        # imobiliarias em agencias_excluidas_ranking (INTERNO, RIO VERMELHO -
+        # ver docstring) contam SOMENTE no funil geral: nao entram no filtro/
+        # grafico diario, no leaderboard, nem no ranking de corretores.
+        is_funil_only = norm_key(agencia) in cfg["_rank_excl"]
 
-        all_agencies_ever.add(agencia)
+        if not is_funil_only:
+            all_agencies_ever.add(agencia)
 
         if is_valid:
             funil_validos += 1
@@ -352,14 +362,14 @@ def build_data(rows, cfg, today=None, history_store=None):
         w_start, _ = week_bounds(d)
         history_week_agency_status[w_start.isoformat()][agencia][st] += 1
 
-        if is_valid and norm_key(agencia) not in cfg["_rank_excl"]:
+        if is_valid and not is_funil_only:
             corretor_hist = canonical_broker(raw_corretor, cfg)
             if corretor_hist:
                 w_start_iso = w_start.isoformat()
                 history_week_broker_valid[w_start_iso][corretor_hist] += 1
                 history_week_broker_agency_count[w_start_iso][corretor_hist][agencia] += 1
 
-        if w_start == week_start:
+        if w_start == week_start and not is_funil_only:
             week_agency_status[agencia][st] += 1
             daily[agencia][d.isoformat()][st] += 1
             daily["__ALL__"][d.isoformat()][st] += 1
