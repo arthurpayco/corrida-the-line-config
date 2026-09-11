@@ -275,7 +275,23 @@ def build_data(rows, cfg, today=None, history_store=None):
     if today is None:
         today = datetime.now(TZ).date() if TZ else date.today()
 
-    week_start, week_end = week_bounds(today)
+    # Na sexta-feira (primeiro dia da semana da campanha) a atualizacao roda
+    # bem cedo, antes de qualquer cadastro novo entrar - se usassemos a
+    # semana real de "hoje" o placar apareceria zerado por um dia inteiro,
+    # toda semana. Por isso, na sexta, a view "atual" (leaderboard, grafico
+    # diario, corretores, insight, e o campo "today" usado pra destacar o dia
+    # no grafico) continua mostrando a semana que acabou de fechar ontem
+    # (quinta) - como se ainda fosse quinta. No sabado a visao troca
+    # normalmente para a semana nova, que ja' teve um dia inteiro (sexta)
+    # pra acumular cadastros. Isso tambem empurra o fechamento OFICIAL
+    # (congelamento em history_store) de sexta pra sabado, o que e' desejado:
+    # da uma folga de um dia para eventuais cadastros de quinta ainda serem
+    # sincronizados no Zeev antes do numero final travar.
+    display_today = today
+    if today.weekday() == 4:  # segunda=0 ... sexta=4
+        display_today = today - timedelta(days=1)
+
+    week_start, week_end = week_bounds(display_today)
 
     rows_total = len(rows)
     rows_excluded_test = 0
@@ -523,7 +539,7 @@ def build_data(rows, cfg, today=None, history_store=None):
             "label": fmt_week_label(week_start, week_end),
             "days": week_days,
         },
-        "today": today.isoformat(),
+        "today": display_today.isoformat(),
         "config": {
             "valor_por_cadastro": valor_unit,
             "premio_semanal": premio,
